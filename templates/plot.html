@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Time Series Plot</title>
+    <script>
+        setTimeout(function(){
+            location.reload();
+        }, 1000);
+    </script>
+</head>
+<body>
+        <h1>Time Series Plot</h1>
+        <img src="{{ url_for('static', filename='plot.png') }}?{{current_time}}">
+    </body>
+</html>
