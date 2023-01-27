@@ -6,9 +6,92 @@ import random
 from datetime import datetime
 import time
 import os
+import time
+from enviroplus import gas
+import logging
+from bme280 import BME280
+import pandas as pd 
+import os 
+
+import ST7735
+from PIL import Image, ImageDraw, ImageFont
+from fonts.ttf import RobotoMedium as UserFont
+import logging
+
+try:
+    from smbus2 import SMBus
+except ImportError:
+    from smbus import SMBus
+
+
+working_directory=os.getcwd() #use as default
+save_rate = 100000
+initialization_wait = 30
 
 # Dataframe to store sensor data
 df = pd.DataFrame()
+counter = 0
+
+# construct the path to the csv folder
+csv_folder = os.path.join(working_directory, 'archived_data')
+
+###Set up BME Sensor
+bus = SMBus(1)
+bme280 = BME280(i2c_dev=bus)
+
+### Set up LCD 
+logging.basicConfig(
+    format='%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s',
+    level=logging.INFO,
+    datefmt='%Y-%m-%d %H:%M:%S')
+
+logging.info("""Initialize text""")
+
+# Create LCD class instance.
+disp = ST7735.ST7735(
+    port=0,
+    cs=1,
+    dc=9,
+    backlight=12,
+    rotation=270,
+    spi_speed_hz=10000000
+)
+
+def update_display(message: str = "", font_size: int = 25) -> None:
+    """
+    Update the text displayed on the LCD screen with the given message and font size.
+    
+    Parameters:
+        message (str): The message to be displayed on the screen
+        font_size (int): The font size of the message
+        
+    Returns:
+        None
+    """
+    # Text settings.
+    font = ImageFont.truetype(UserFont, font_size)
+    text_colour = (255, 255, 255)
+    back_colour = (0, 170, 170)
+
+    size_x, size_y = draw.textsize(message, font)
+
+    # Calculate text position
+    x = (WIDTH - size_x) / 2
+    y = (HEIGHT / 2) - (size_y / 2)
+
+    # Draw background rectangle and write text.
+    draw.rectangle((0, 0, 160, 80), back_colour)
+    draw.text((x, y), message, font=font, fill=text_colour)
+    disp.display(img)
+
+
+def get_cpu_temperature():
+    with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+        temp = f.read()
+        temp = int(temp) / 1000.0
+    return temp
+
+
 
 # Function to read data from environmental sensor 
 def read_enviro_sensor():
@@ -42,9 +125,6 @@ def read_enviro_sensor():
     df = df.append(df_timestep, ignore_index=True)
     return df
 
-# construct the path to the csv folder
-csv_folder = os.path.join(os.getcwd(), 'archived_data')
-
 # Function to save dataframe to a CSV file
 def save_to_csv():
     global df
@@ -62,31 +142,46 @@ plots_folder = os.path.join(os.getcwd(), 'static')
 if not os.path.exists(plots_folder):
     os.makedirs(plots_folder)
 
-# Counter variable to keep track of the number of iterations
-counter = 0
+#Initialize the sensors
+#The first 20-30 seconds of a few sesors are grossly off of baseline
+
+read_enviro_sensor()
+df = pd.DataFrame()
+time.sleep(initialization_wait)
 
 
-while True:
-    # Get data
-    read_enviro_sensor()
+try:
+    while True:
+        # Get data
+        read_enviro_sensor()
 
-    # Create a figure with multiple subplots
-    fig, axes = plt.subplots(nrows=4, ncols=2, figsize=(10, 10))
-    plt.suptitle("Time Series Plots")
-    axes = axes.ravel()
+        # Create a figure with multiple subplots
+        fig, axes = plt.subplots(nrows=4, ncols=2, figsize=(10, 10))
+        plt.suptitle("Time Series Plots")
+        axes = axes.ravel()
 
-    columns = ['oxidising_ohms', 'nh3_ohms', 'reducing_ohms', 'temperature_bme280', 'pressure_bme280', 'humidity_bme280', 'temperature_cpu']
-    x_axis = 'time'
-    for i, col in enumerate(columns):
-        axes[i].plot(df[x_axis], df[col])
-        axes[i].set_xlabel(x_axis)
-        axes[i].set_ylabel(col)
-    # construct the path to the plot image
-    plot_path = os.path.join(plots_folder, 'plot.png')
-    plt.savefig(plot_path)
-    print("Figure saved!")
-    # Save dataframe to a CSV file every 10 iterations
-    if counter % 10 == 0:
-        save_to_csv()
-    counter += 1
-    time.sleep(1)
+        columns = ['oxidising_ohms', 'nh3_ohms', 'reducing_ohms', 'temperature_bme280', 'pressure_bme280', 'humidity_bme280', 'temperature_cpu']
+        x_axis = 'time'
+        for i, col in enumerate(columns):
+            axes[i].plot(df[x_axis], df[col])
+            axes[i].set_xlabel(x_axis)
+            axes[i].set_ylabel(col)
+        # construct the path to the plot image
+        plot_path = os.path.join(plots_folder, 'plot.png')
+        plt.savefig(plot_path)
+        print("Figure saved!")
+        # Save dataframe to a CSV file every 10 iterations
+        if counter % save_rate == 0:
+            save_to_csv()
+        counter += 1
+        print(df.tail(1))
+        update_display(message=f"cpu_temp = {df['temperature_cpu'].round(2)} degC")
+        time.sleep(1)
+except MemoryError:
+    update_display(message="Memory Error")
+except KeyboardInterrupt:
+    update_display(message="Bye!")
+except IOError:
+    update_display(message="IOError")
+except OSError:
+    update_display(message="OSError")
