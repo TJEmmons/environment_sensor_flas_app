@@ -57,6 +57,17 @@ disp = ST7735.ST7735(
     spi_speed_hz=10000000
 )
 
+# Initialize display.
+disp.begin()
+
+# Width and height to calculate text position.
+WIDTH = disp.width
+HEIGHT = disp.height
+
+# New canvas to draw on.
+img = Image.new('RGB', (WIDTH, HEIGHT), color=(0, 0, 0))
+draw = ImageDraw.Draw(img)
+
 def update_display(message: str = "", font_size: int = 25) -> None:
     """
     Update the text displayed on the LCD screen with the given message and font size.
