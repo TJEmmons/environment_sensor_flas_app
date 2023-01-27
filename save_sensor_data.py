@@ -106,6 +106,9 @@ def get_cpu_temperature():
 
 # Function to read data from environmental sensor 
 def read_enviro_sensor():
+
+    current_time = time.time()
+    
     # Read data from sensor
     gas_reading = gas.read_all()
     ox = gas_reading.oxidising
